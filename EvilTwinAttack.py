@@ -14,18 +14,8 @@ channel_list = []
 essid_list = []
 bssid_list = []
 enc_list = []
-interface='' # monitor interface
-networks = {} #vdictionary to store unique APs
+networks = {} # dictionary to store APs
 interface_list = [] # Lista para interfaces
-interface = ""
-bssid     = ""
-essid     = ""
-channel   = ""
-txpower   = ""
-network   = ""
-mask      = ""
-gateway   = ""
-
 # Beacons and ProbeResponses.
 def sniffAP(p):
     if ( (p.haslayer(Dot11Beacon) or p.haslayer(Dot11ProbeResp))
@@ -58,28 +48,50 @@ def sniffAP(p):
             # Imprime cada que encuentra una nueva red
             print "{0:3}\t{1:10}\t{2:20}\t{3:20}".format(int(channel), enc, bssid, essid)
 
-# Channel hopper
-def channel_hopper():
-    while True:
-        try:
-            channel1 = random.randrange(1,15)
-            os.system("iw dev %s set channel %d" % (interface, channel1))
-            time.sleep(.5)
-        except KeyboardInterrupt:
-            break
+def sniff_process(interface):
+    # Imprimir cabecera del escaneo
+    print "\nEl escaneo terminara el 15 segundos u oprime CTRL + C"
+    print "{0:3}\t{1:10}\t{2:20}\t{3:20}".format('CH','ENC','BSSID','SSID')
+    # Ininicamos el Sniffer
+    sniff(iface=interface,prn=sniffAP,timeout=15)
 
-# Capture interrupt signal and cleanup before exiting
-def signal_handler(signal, frame):
-    p.terminate()
-    p.join()
+def clean_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
-    # Imprimir cabecera de resultados
-    print "{0:3}\t{1:5}\t{2:20}\t{3:20}\t{4:5}".format('ID', 'Canal', 'ESSID', 'BSSID', 'ENC')
-    for i in range(len(essid_list)):
-        print "{0:3}\t{1:5}\t{2:20}\t{3:20}\t{4:5}".format(i, channel_list[i], essid_list[i], bssid_list[i], enc_list[i])
-    print("[*] Stop sniffing")
-    return
-    #sys.exit(0)
+
+def chose_iface(interface):
+    # Listar interfaces disponibles
+    interface_list = netifaces.interfaces()
+    print "======= Interfaces disponibles =======\n"
+    for i, interface in enumerate(interface_list):
+        print "\t%02d: %s" %(i, str(interface))
+    target_interface = raw_input('\nIntroduce la interface a utilizar en modo monitor ')
+    while target_interface not in interface_list:
+        raw_input('Interface no se encuentra... Por favor introduce otro: ')
+    # Cambiamos interfaz a modo: Monitor
+    print 'Cambiando interface ' + target_interface + ' a modo monitor '
+    return target_interface
+
+def monitor_iface(target_interface):
+    os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
+    interface = str(target_interface)+'mon'
+    return interface
+
+def iface_txpower(interface,args):
+    # Cambiar potencia de antena
+    if args.mode == "interactivo":
+        target_txpower = raw_input('\n¿Deseas incrementar la potencia de tu antena a 30dB? (s/n)')
+        if target_txpower == 's':
+            os.system("ifconfig %s down" % (interface))
+            os.system("iw reg set GY") #GY o BO
+            os.system("ifconfig %s up" % (interface))
+            os.system("iwconfig %s txpower 30" % (interface))
+        elif target_txpower == 'n':
+            pass
+    if args.txpower != None and args.mode != "interactivo":
+        os.system("ifconfig %s down" % (interface))
+        os.system("iw reg set GY") #GY o BO
+        os.system("ifconfig %s up" % (interface))
+        os.system("iwconfig %s txpower %s" % (interface,str(args.txpower)))
 
 def use_mode(args):
     if args.mode == "interactivo" or args.mode == "file":
@@ -91,6 +103,35 @@ def use_mode(args):
         network   = None
         mask      = None
         gateway   = None
+        if args.mode == "interactivo":
+            # Listamos interfaces
+            target_interface = chose_iface(interface)
+            #Cambiamos a modo: Monitor
+            interface = monitor_iface(target_interface)
+            # Cambair la potencia de la antena.
+            iface_txpower(interface,args)
+            # Proceso de sniffer para redes WIFI
+            sniff_process(interface)
+            # Limpiamos la terninal antes de mostrar los resultados
+            clean_screen()
+            # Mostramos redes disponibles
+            print "======= Redes Inalambricas Disponibles =======\n"
+            print "{0:3}\t{1:5}\t{2:28}\t{3:20}\t{4:5}".format('ID', 'Canal', 'ESSID', 'BSSID', 'ENC')
+            for i in range(len(essid_list)):
+                print "{0:3}\t{1:5}\t{2:28}\t{3:20}\t{4:5}".format(i, channel_list[i], essid_list[i], bssid_list[i], enc_list[i])
+            target_bssid = raw_input('Introduce el BSSID de la red Wifi a clonar: ')
+            while target_bssid not in networks:
+                raw_input('BSSID no se encuentra... Por favor introduce otro: ')
+            '''
+            Codigo para implementar Rouge AP...
+
+            ejemplo de codigo:
+            # Configurando la interfaz por el canal que deseamos
+            print 'Changing ' + interface + ' to channel ' + channel
+            os.system("iwconfig %s channel %d" % (args.interface, 10))#channel))
+            '''
+        if args.mode == "file":
+            pass
     elif args.mode == "args":
         interface = args.interface
         bssid     = args.bssid
@@ -102,14 +143,7 @@ def use_mode(args):
         gateway   = args.gateway
     else:
         print "\nElige un modo de uso corecto:\n\t[interactivo, args , file]"
-
-def iface_txpower(interface,args):
-    # Cambiar potencia de antena
-    os.system("ifconfig %s down" % (interface))
-    os.system("iw reg set GY") #GY o BO
-    os.system("ifconfig %s up" % (interface))
-    os.system("iwconfig %s txpower %s" % (interface,str(args.txpower)))
-
+    return interface,bssid,essid,channel,txpower,network,mask,gateway
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Implementacion de Evil Twin Attack')
@@ -125,51 +159,3 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     use_mode(args)
-
-    #os.system("iwconfig %s" % (interface)) # Confirmacion de cambio
-    # Listar interfaces disponibles
-    interface_list = netifaces.interfaces()
-    print "======= Interfaces disponibles =======\n"
-    for i, interface in enumerate(interface_list):
-        print "\t%02d: %s" %(i, str(interface))
-    target_interface = raw_input('\nIntroduce la interface a utilizar en modo monitor ')
-    while target_interface not in interface_list:
-        raw_input('Interface no se encuentra... Por favor introduce otro: ')
-    # Cambiamos interfaz a modo: Monitor
-    print 'Cambiando interface ' + target_interface + ' a modo monitor '
-    os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
-    interface = str(target_interface)+'mon'
-
-    # Cambair la potencia de la antena.
-    iface_txpower(interface,args)
-
-    # Imprimir cabecera del escaneo
-    print "\nEl escaneo terminara el 15 segundos"
-    print "{0:3}\t{1:10}\t{2:20}\t{3:20}".format('CH','ENC','BSSID','SSID')
-    # Iniciamos el channel hopper
-    p = Process(target = channel_hopper)
-    p.start()
-
-    # Capturamos CTRL-C
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Ininicamos el Sniffer
-    sniff(iface=interface,prn=sniffAP,timeout=15)
-    # Reiniciamos nuestra signal
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-    # Limpiamos la terninal antes de mostrar los resultados
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print "======= Redes Inalambricas Disponibles =======\n"
-    print "{0:3}\t{1:5}\t{2:20}\t{3:20}\t{4:5}".format('ID', 'Canal', 'ESSID', 'BSSID', 'ENC')
-    for i in range(len(essid_list)):
-        print "{0:3}\t{1:5}\t{2:20}\t{3:20}\t{4:5}".format(i, channel_list[i], essid_list[i], bssid_list[i], enc_list[i])
-
-    target_bssid = raw_input('Introduce el BSSID de la red Wifi a clonar ')
-    while target_bssid not in networks:
-        raw_input('BSSID no se encuentra... Por favor introduce otro: ')
-
-    # Regresamos inerraz a modo managed
-    #os.system("airmon-ng stop %s 1>/dev/null" % (interface))
-    # Configurando la interfaz por el canal que deseamos
-    print 'Changing ' + interface + ' to channel ' + channel
-    os.system("iwconfig %s channel %s" % (args.interface, channel))
