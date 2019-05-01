@@ -44,10 +44,6 @@ def addOptions():
     parser.add_argument('-C'    , '--cdb'       , dest='cdb'       , required=False , default=None      , help='Creacion de una base de datos')
     parser.add_argument('-D'    , '--ddb'       , dest='ddb'       , required=False , default=None      , help='Eliminacion de una base de datos')
     parser.add_argument('-F'    , '--file'      , dest='config'    , required=False , default=None      , help='Indica el archivo el cual contiene las opciones para ejecutar el programa')
-    #parser.add_argument('-B'    , '--base'      , dest='base'      , type=str       , required=False    , default=None   , help='Nombre de la base de datos')
-    #parser.add_argument('-U'    , '--usuario'   , dest='usuario'   , type=str       , required=False    , default=None   , help='Nombre del usuario que se creara para acceder a la base de datos de MySQL')
-    #parser.add_argument('-P'    , '--password'  , dest='password'  , type=str       , required=False    , default=None   , help='Password del usuario creado para acceder a la base de datos')
-    #parser.add_argument('-t'    , '--table'     , dest='table'     , type=str       , required=False    , default=None   , help='Nombre de la tabla de la base de datos')
     args = parser.parse_args()
     return args
 
@@ -72,10 +68,6 @@ def addOptionsFile(configfile):
     parser.add_option('-C'      , '--cdb'       , dest='cdb'        , default=config.get("Options", "cdb")          , help='Creacion de una base de datos')
     parser.add_option('-D'      , '--ddb'       , dest='ddb'        , default=config.get("Options", "ddb")          , help='Eliminacion de una base de datos')
     parser.add_option('-F'      , '--file'      , dest='config'     , default=None                                  , help='Archivo del cual se tomara la configuracon a implemetar')
-    #parser.add_option('-B'      , '--base'      , dest='base'       , type=str       , default=config.get("Options","base")          , help='Nombre de la base de datos')
-    #parser.add_option('-U'      , '--usuario'   , dest='usuario'    , type=str       , default=config.get("Options","usuario")       , help='Nombre del usuario que se creara para acceder a la base de datos de MySQL')
-    #parser.add_option('-P'      , '--password'  , dest='password'   , type=str       , default=config.get("Options","password")      , help='Password del usuario creado para acceder a la base de datos')
-    #parser.add_option('-t'      , '--table'     , dest='table'      , type=str       , default=config.get("Options","table")       , help='Nombre de la tabla de la base de datos')
     args = parser.parse_args()
     return args
 
@@ -113,21 +105,27 @@ def packagePip():
     '''
     lista = ['netifaces']
     for indice in lista:
-        packagePipVerify(indice)
+        install(indice)
 
-def packagePipVerify(package):
+def install(package):
     '''
-    Funcion que comprueba si esta instalada una libreria en python y la importa en caso contrario la instala y la importa.
+    Funcion que comprueba si esta instalada una libreria en python y la importa en caso contrario la instala.
     '''
     import importlib
     try:
         importlib.import_module(package)
     except ImportError:
         print "Instalando " + package
-	pip.main(['install', 'netifaces'])
-    finally:
-        globals()[package] = importlib.import_module(package)
+	proc = subprocess.call(['pip', 'install', package])
+    importM(package)	
 
+def importM(package):
+	'''
+	Funcion que importa el modulo de python si es que se instalo
+	'''
+	importlib.import_module(package)
+	print "Importando paquete " + package
+	
 def verifyPackage():
     '''
     Verifica si tenemos instalados los paquetes necesarios para ejecutar el programa, en caso contrario lo instala
@@ -437,6 +435,7 @@ def use_modeI(mode):
     # Llamamos a la funcion desAuthentication()
     #desAuthentication(interface,bssid)
     creacionSitio()
+    create_db(usuario, password, base, table)
 
 def use_modeAF(mode, interface, bssid, essid, channel, txpower, first_ip, last_ip, mask, gateway):
     '''
@@ -458,6 +457,7 @@ def use_modeAF(mode, interface, bssid, essid, channel, txpower, first_ip, last_i
     conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway)
     # Llamamos la funcion dnsspoof() para redirigir a nuetra Fake page
     creacionSitio()
+    create_db(usuario, password, base, table)
 
 def use():
     '''
@@ -511,30 +511,35 @@ if __name__ == "__main__":
     '''
     Funcion principal parecida al main del lenguaje de programacion C.
     '''
-    validaciones()
-    opts = addOptions()
-    if opts.cdb != None: #and len(sys.argv) == 5:
-        print "Creando base de datos..."
-        create_db(usuario, password, base, table)
-    elif opts.ddb != None: #and len(sys.argv) == 5:
-        print "Borrando base de datos"
-        delete_db(base, usuario)
-    #Modo de ejecucion interactivo
-    elif opts.mode == "interactivo":
-        print "Mode: Interactivo"
-        use_modeI(opts.mode)
-    #Modo de ejecucion args
-    elif opts.mode == 'args':
-        print "Mode: args"
-        use_modeAF(opts.mode, opts.interface, opts.bssid, opts.essid, opts.channel, opts.txpower, opts.first_ip, opts.last_ip, opts.mask, opts.gateway)
-    #Modo de ejecucion file
-    elif opts.mode == 'file':
-        print "Mode: file"
-        opts = addOptionsFile(opts.config)
-        use_modeAF(opts[0].mode, opts[0].interface, opts[0].bssid, opts[0].essid, opts[0].channel, opts[0].txpower, opts[0].first_ip, opts[0].last_ip, opts[0].mask, opts[0].gateway)
-    #Ejemplo de como ejecutar el programa
-    else:
-        use()
+    try:
+    	validaciones()
+    	opts = addOptions()
+    	if opts.cdb != None: #and len(sys.argv) == 5:
+            print "Creando base de datos..."
+            create_db(usuario, password, base, table)
+    	elif opts.ddb != None: #and len(sys.argv) == 5:
+            print "Borrando base de datos"
+            delete_db(base, usuario)
+    	#Modo de ejecucion interactivo
+    	elif opts.mode == "interactivo":
+            print "Mode: Interactivo"
+            use_modeI(opts.mode)
+    	#Modo de ejecucion args
+    	elif opts.mode == 'args':
+            print "Mode: args"
+            use_modeAF(opts.mode, opts.interface, opts.bssid, opts.essid, opts.channel, opts.txpower, opts.first_ip, opts.last_ip, opts.mask, opts.gateway)
+    	#Modo de ejecucion file
+    	elif opts.mode == 'file':
+            print "Mode: file"
+            opts = addOptionsFile(opts.config)
+            use_modeAF(opts[0].mode, opts[0].interface, opts[0].bssid, opts[0].essid, opts[0].channel, opts[0].txpower, opts[0].first_ip, opts[0].last_ip, opts[0].mask, opts[0].gateway)
+    	#Ejemplo de como ejecutar el programa
+    	else:
+            use()
+    except Exception as e:
+        printError('An unexpected error happend :(')
+        printError(e, True)
+	
 
 '''
 Mode interactivo: python evil.py -u interactivo
