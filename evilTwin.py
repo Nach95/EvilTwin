@@ -110,6 +110,7 @@ def install(package):
     '''
     Funcion que comprueba si esta instalada una libreria en python y la importa en caso contrario la instala y la importa.
     '''
+    import importlib
     try:
         importlib.import_module(package)
     except ImportError:
@@ -224,8 +225,8 @@ def monitor_iface(target_interface):
         print "La interface %s no existe" % (target_interface)
         sys.exit()
     os.system("airmon-ng start %s 1>/dev/null" % (target_interface))
-    interface = str(target_interface)
-    #interface = str(target_interface)+'mon'
+    #interface = str(target_interface)
+    interface = str(target_interface)+'mon'
     return interface
 
 def iface_txpower(interface,mode,txpower):
@@ -518,7 +519,7 @@ def creacionSitio():
     os.system("chown www-data:www-data /var/www/html/*")
     print "\nCreacion del sitio web falso..."
     restartApache()
-    create_db(usuario, password, base, table)
+    #create_db(usuario, password, base, table)
 
 if __name__ == "__main__":
     '''
